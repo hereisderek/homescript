@@ -1,1 +1,2 @@
-.env.derek
+.derek.env
+config/rclone/rclone.derek.conf

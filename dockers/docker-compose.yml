@@ -2,7 +2,13 @@ version: "3.7"
 
 networks:
   default:
-    name: home_service
+    external:
+      name: home_service
+      # driver: bridge
+
+  # default:
+  #   name: home_service
+  #   driver: host
 
 services:
   portaineragent:
@@ -43,9 +49,11 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - ${BASE_DATA_DIR}/portainer:/data
+      - ${HOME_SCRIPT_STORAGE}:/storage
 
   rclone_mount:
     image: hereisderek/rclone_mergerfs_mounter:latest
+    container_name: rclone_mount
     privileged: true
     security_opt:
       - seccomp:unconfined
@@ -55,19 +63,31 @@ services:
       - ${RCLONE_MOUNT_PORT_5572}:5572
     cap_add:
       - SYS_ADMIN
+      - SETPCAP
+      - MKNOD
     environment:
       - PGID=${PGID}
       - PUID=${PUID}
       - TZ=${TZ}
-      - RCLONE_EXTRA_PARAMS="-vv"
-      - RCLONE_RC_AUTH="${RCLONE_RC_AUTH}"
+      - RC_USER=${RC_USER}
+      - RC_PASS=${RC_PASS}
+      - USE_RCD=false
+      - PARAMS_COMMON_EXTRA=-vv
       - RCLONE_REMOTE=${RCLONE_MOUNT_SHARE}
+      - MERGERFS_MOUNT_RCLONE_PATH=${RCLONE_MOUNT_MERGERFS_MOUNT_RCLONE_PATH:-"/"}
+      - RCLONE_CONFIG_FILE_NAME=${RCLONE_CONFIG_FILE_NAME:-rclone.conf}
+      - RC_SERVE=true 
+      - RC_ENABLE_METRICS=true
+      # - RCLONE_IP_PORT=:5572
+
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - ${BASE_CONFIG_DIR}/rclone_mount:/config
+      - ${RCLONE_MOUNT_SHARE_CONFIG_FOLDER}:/config/rclone
       - ${BASE_CACHE_DIR}/rclone_mount:/cache
-      - ${RCLONE_MOUNT_RCLONE_MOUNT_POINT}:/rclone
-      - ${RCLONE_MOUNT_MERGERFS_MOUNT_POINT}:/merged
+      - ${RCLONE_MOUNT_MERGERFS_LOCAL}:/storage
+      - ${MOUNT_PARENT}:/mnt:shared
+    
+
 
 
   sonarr:
@@ -151,7 +171,8 @@ services:
       - ${HOME_SCRIPT_STORAGE}:/storage
 
   readarr:
-    image: ghcr.io/linuxserver/readarr
+    image: hotio/readarr:nightly
+    # image: ghcr.io/linuxserver/readarr
     container_name: readarr
     ports:
       - ${READARR_PORT_8686}:8787
@@ -171,14 +192,14 @@ services:
       - ${HOME_SCRIPT_STORAGE}:/storage
 
   prowlarr:
-    image: ghcr.io/linuxserver/prowlarr:develop
+    image: linuxserver/prowlarr:nightly
     container_name: prowlarr
     ports:
       - ${PROWLARR_PORT_8787}:8787
     environment:
       - PUID=1000
       - PGID=1000
-      - TZ=Europe/London
+      - TZ={TZ}
     logging:
       driver: json-file
       options:
@@ -209,7 +230,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ${BASE_DATA_DIR}/jackett:/config
-      - ${HOME_SCRIPT_STORAGE}:/downloads
+      - ${HOME_SCRIPT_STORAGE}/_downloads/jackett:/downloads
 
 
   qbittorrent:
@@ -234,49 +255,7 @@ services:
       - ${BASE_DATA_DIR}/qbittorrent:/config
       - ${HOME_SCRIPT_STORAGE}:/storage
 
-  # nzbget:
-  #   image: lscr.io/linuxserver/nzbget
-  #   ports:
-  #     - ${NZBGET_PORT_6789}:6789
-  #   container_name: nzbget
-  #   environment:
-  #     - PGID=${PGID}
-  #     - PUID=${PUID}
-  #     - TZ=${TZ}
-  #   logging:
-  #     driver: json-file
-  #     options:
-  #       max-file: ${BASE_LOGGING_MAXFILE}
-  #       max-size: ${BASE_LOGGING_MAXSIZE}
-  #   restart: ${NZBGET_RESTART}
-  #   volumes:
-  #     - /etc/localtime:/etc/localtime:ro
-  #     - ${BASE_CONFIG_DIR}/nzbget:/config
-  #     - ${HOME_SCRIPT_STORAGE}:/storage
 
-  # transmission:
-  #   image: lscr.io/linuxserver/transmission
-  #   ports:
-  #     - ${TRANSMISSION_PORT_51413}:51413
-  #     - ${TRANSMISSION_PORT_51413}:51413/udp
-  #     - ${TRANSMISSION_PORT_6881}:6881
-  #     - ${TRANSMISSION_PORT_6881}:6881/udp
-  #     - ${TRANSMISSION_PORT_9091}:9091
-  #   container_name: transmission
-  #   environment:
-  #     - PGID=${PGID}
-  #     - PUID=${PUID}
-  #     - TZ=${TZ}
-  #   logging:
-  #     driver: json-file
-  #     options:
-  #       max-file: ${BASE_LOGGING_MAXFILE}
-  #       max-size: ${BASE_LOGGING_MAXSIZE}
-  #   restart: ${TRANSMISSION_RESTART}
-  #   volumes:
-  #     - /etc/localtime:/etc/localtime:ro
-  #     - ${BASE_CONFIG_DIR}/transmission:/config
-  #     - ${HOME_SCRIPT_STORAGE}:/storage
 
   jellyfin:
     image: lscr.io/linuxserver/jellyfin:nightly
@@ -300,8 +279,8 @@ services:
     ports:
       - ${JELLYFIN_WEB_8096}:8096
       # - 8920:8920 #optional
-      - 7359:7359/udp #optional
-      - 1900:1900/udp #optional
+      - ${JELLYFIN_PORT_7359}:7359/udp #optional
+      - ${JELLYFIN_PORT_1900}:1900/udp #optional
     devices:
       - /dev/dri:/dev/dri
       - /dev/nvidia0:/dev/nvidia0
@@ -315,3 +294,48 @@ services:
         reservations:
           devices:
           - capabilities: [gpu]
+
+
+  # nzbget:
+  #   image: lscr.io/linuxserver/nzbget
+  #   ports:
+  #     - ${NZBGET_PORT_6789}:6789
+  #   container_name: nzbget
+  #   environment:
+  #     - PGID=${PGID}
+  #     - PUID=${PUID}
+  #     - TZ=${TZ}
+  #   logging:
+  #     driver: json-file
+  #     options:
+  #       max-file: ${BASE_LOGGING_MAXFILE}
+  #       max-size: ${BASE_LOGGING_MAXSIZE}
+  #   restart: ${NZBGET_RESTART}
+  #   volumes:
+  #     - /etc/localtime:/etc/localtime:ro
+  #     - ${BASE_DATA_DIR}/nzbget:/config
+  #     - ${HOME_SCRIPT_STORAGE}:/storage
+
+  transmission:
+    image: lscr.io/linuxserver/transmission
+    ports:
+      - ${TRANSMISSION_PORT_51413}:51413
+      - ${TRANSMISSION_PORT_51413}:51413/udp
+      - ${TRANSMISSION_PORT_6881}:6881
+      - ${TRANSMISSION_PORT_6881}:6881/udp
+      - ${TRANSMISSION_PORT_9091}:9091
+    container_name: transmission
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    logging:
+      driver: json-file
+      options:
+        max-file: ${BASE_LOGGING_MAXFILE}
+        max-size: ${BASE_LOGGING_MAXSIZE}
+    restart: ${BASE_RESTART_STRATEGY}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${BASE_DATA_DIR}/transmission:/config
+      - ${HOME_SCRIPT_STORAGE}:/storage
