@@ -2,13 +2,13 @@ version: "3.7"
 
 networks:
   default:
-    external:
-      name: home_service
-      # driver: bridge
+    name: home_service
+    driver: bridge
 
-  # default:
-  #   name: home_service
-  #   driver: host
+  slickvpn:
+    name: slickvpn
+    driver: bridge
+    
 
 services:
   portaineragent:
@@ -339,3 +339,39 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ${BASE_DATA_DIR}/transmission:/config
       - ${HOME_SCRIPT_STORAGE}:/storage
+
+  slickvpn:
+    container_name: slickvpn
+    image: dperson/openvpn-client
+    volumes:
+        - ./config/slickvpn/:/vpn/
+        # - /dev/net:/dev/net:z
+    cap_add:
+      - net_admin
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    networks:
+      - default
+      - slickvpn
+    # if using '-d' or 'DNS' you can't enable the `read_only: true` option
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    restart: unless-stopped
+    security_opt:
+      - label:disable
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    # command: 'server;user;password[;port]'
+  
+
+  # stdin_open: true
+  # tty: true
+  
+  # Put .ovpn configuration file in the /vpn directory (in "volumes:" above or
+  # launch using the command line arguments, IE pick one:
+  #  - ./vpn:/vpn
+  # command: 'server;user;password[;port]'
