@@ -5,12 +5,79 @@ networks:
     name: home_service
     driver: bridge
 
-  slickvpn:
-    name: slickvpn
+  torrentvpn:
+    name: torrentvpn
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+          # gateway: 172.25.0.2
+          # netmask: 255.255.0.0
+    
     
 
 services:
+  torrentvpn:
+    container_name: torrentvpn
+    image: dperson/openvpn-client
+    volumes:
+        - ./config/vpn/:/vpn/
+    cap_add:
+      - net_admin
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    networks:
+      # torrentvpn:
+      #   ipv4_address: 172.25.0.2
+      # default: null
+      - default
+      - torrentvpn
+    ports:
+      - ${QBIT_MANAGE_PORT_8080}:8080
+    sysctls:
+      - net.ipv6.conf.all.disable_ipv6=0
+    # if using '-d' or 'DNS' you can't enable the `read_only: true` option
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    restart: unless-stopped
+    security_opt:
+      - label:disable
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+  
+  qbittorrent:
+    container_name: qbittorrent
+    image: hotio/qbittorrent
+    network_mode: "service:torrentvpn"
+    # networks:
+    #   torrentvpn:
+    #     ipv4_address: 172.25.0.3
+      # - default
+      # - torrentvpn
+    depends_on:
+      - torrentvpn
+    # ports:
+    #   - ${QBIT_MANAGE_PORT_8080}:8080
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    logging:
+      driver: json-file
+      options:
+        max-file: ${BASE_LOGGING_MAXFILE}
+        max-size: ${BASE_LOGGING_MAXSIZE}
+    restart: ${BASE_RESTART_STRATEGY}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${BASE_DATA_DIR}/qbittorrent:/config
+      - ${HOME_SCRIPT_STORAGE}:/storage
+
   portaineragent:
     image: portainer/agent
     ports:
@@ -52,7 +119,7 @@ services:
       - ${HOME_SCRIPT_STORAGE}:/storage
 
   rclone_mount:
-    image: hereisderek/rclone_mergerfs_mounter:latest
+    image: hereisderek/rclone_mergerfs_mounter:nightly
     container_name: rclone_mount
     privileged: true
     security_opt:
@@ -73,22 +140,16 @@ services:
       - RC_PASS=${RC_PASS}
       - USE_RCD=false
       - PARAMS_COMMON_EXTRA=-vv
-      - RCLONE_REMOTE=${RCLONE_MOUNT_SHARE}
-      - MERGERFS_MOUNT_RCLONE_PATH=${RCLONE_MOUNT_MERGERFS_MOUNT_RCLONE_PATH:-"/"}
-      - RCLONE_CONFIG_FILE_NAME=${RCLONE_CONFIG_FILE_NAME:-rclone.conf}
+      - RCLONE_REMOTE="share"
       - RC_SERVE=true 
       - RC_ENABLE_METRICS=true
-      # - RCLONE_IP_PORT=:5572
 
     volumes:
       - /etc/localtime:/etc/localtime:ro
-      - ${RCLONE_MOUNT_SHARE_CONFIG_FOLDER}:/config/rclone
+      - ${BASE_DATA_DIR}/rclone:/config/rclone
       - ${BASE_CACHE_DIR}/rclone_mount:/cache
       - ${RCLONE_MOUNT_MERGERFS_LOCAL}:/storage
-      - ${MOUNT_PARENT}:/mnt:shared
     
-
-
 
   sonarr:
     image: lscr.io/linuxserver/sonarr
@@ -195,7 +256,7 @@ services:
     image: linuxserver/prowlarr:nightly
     container_name: prowlarr
     ports:
-      - ${PROWLARR_PORT_8787}:8787
+      - ${PROWLARR_PORT_9696}:9696
     environment:
       - PUID=1000
       - PGID=1000
@@ -233,27 +294,22 @@ services:
       - ${HOME_SCRIPT_STORAGE}/_downloads/jackett:/downloads
 
 
-  qbittorrent:
-    container_name: qbittorrent
-    image: hotio/qbittorrent
-    # networks:
-    #   - compose_default
-    ports:
-      - ${QBIT_MANAGE_PORT_8080}:8080
+  flaresolverr:
+    # DockerHub mirror flaresolverr/flaresolverr:latest
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
     environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_HTML=${LOG_HTML:-false}
+      - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
       - PGID=${PGID}
       - PUID=${PUID}
       - TZ=${TZ}
-    logging:
-      driver: json-file
-      options:
-        max-file: ${BASE_LOGGING_MAXFILE}
-        max-size: ${BASE_LOGGING_MAXSIZE}
-    restart: ${BASE_RESTART_STRATEGY}
-    volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - ${BASE_DATA_DIR}/qbittorrent:/config
-      - ${HOME_SCRIPT_STORAGE}:/storage
+    ports:
+      - "${FLARE_SOLVER_PORT_8191:-8191}:8191"
+    restart: unless-stopped 
+
+
 
 
 
@@ -296,25 +352,25 @@ services:
           - capabilities: [gpu]
 
 
-  # nzbget:
-  #   image: lscr.io/linuxserver/nzbget
-  #   ports:
-  #     - ${NZBGET_PORT_6789}:6789
-  #   container_name: nzbget
-  #   environment:
-  #     - PGID=${PGID}
-  #     - PUID=${PUID}
-  #     - TZ=${TZ}
-  #   logging:
-  #     driver: json-file
-  #     options:
-  #       max-file: ${BASE_LOGGING_MAXFILE}
-  #       max-size: ${BASE_LOGGING_MAXSIZE}
-  #   restart: ${NZBGET_RESTART}
-  #   volumes:
-  #     - /etc/localtime:/etc/localtime:ro
-  #     - ${BASE_DATA_DIR}/nzbget:/config
-  #     - ${HOME_SCRIPT_STORAGE}:/storage
+  nzbget:
+    image: lscr.io/linuxserver/nzbget
+    ports:
+      - ${NZBGET_PORT_6789:-6789}:6789
+    container_name: nzbget
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+    logging:
+      driver: json-file
+      options:
+        max-file: ${BASE_LOGGING_MAXFILE}
+        max-size: ${BASE_LOGGING_MAXSIZE}
+    restart: ${BASE_RESTART_STRATEGY}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${BASE_DATA_DIR}/nzbget:/config
+      - ${HOME_SCRIPT_STORAGE}:/storage
 
   transmission:
     image: lscr.io/linuxserver/transmission
@@ -340,38 +396,3 @@ services:
       - ${BASE_DATA_DIR}/transmission:/config
       - ${HOME_SCRIPT_STORAGE}:/storage
 
-  slickvpn:
-    container_name: slickvpn
-    image: dperson/openvpn-client
-    volumes:
-        - ./config/slickvpn/:/vpn/
-        # - /dev/net:/dev/net:z
-    cap_add:
-      - net_admin
-    environment:
-      - PGID=${PGID}
-      - PUID=${PUID}
-      - TZ=${TZ}
-    networks:
-      - default
-      - slickvpn
-    # if using '-d' or 'DNS' you can't enable the `read_only: true` option
-    read_only: true
-    tmpfs:
-      - /run
-      - /tmp
-    restart: unless-stopped
-    security_opt:
-      - label:disable
-    devices:
-      - /dev/net/tun:/dev/net/tun
-    # command: 'server;user;password[;port]'
-  
-
-  # stdin_open: true
-  # tty: true
-  
-  # Put .ovpn configuration file in the /vpn directory (in "volumes:" above or
-  # launch using the command line arguments, IE pick one:
-  #  - ./vpn:/vpn
-  # command: 'server;user;password[;port]'
