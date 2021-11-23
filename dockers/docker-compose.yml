@@ -8,18 +8,41 @@ networks:
   torrentvpn:
     name: torrentvpn
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.25.0.0/16
-          # gateway: 172.25.0.2
-          # netmask: 255.255.0.0
+    # ipam:
+    #   config:
+    #     - subnet: 172.25.0.0/16
     
     
 
 services:
+  # https://github.com/qdm12/gluetun
+  gluetun:
+    container_name: gluetun
+    image: qmcgaw/gluetun
+    depends_on:
+      - rclone_mount
+    cap_add:
+      - NET_ADMIN
+    ports:
+      - 8888:8888/tcp # HTTP proxy
+      - 8388:8388/tcp # Shadowsocks
+      - 8388:8388/udp # Shadowsocks
+    volumes:
+      - /yourpath:/gluetun
+    environment:
+      - TZ=${TZ}
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - VPNSP=purevpn
+      - OPENVPN_USER=abc
+      - OPENVPN_PASSWORD=abc
+      # - COUNTRY=Netherlands
+
   torrentvpn:
     container_name: torrentvpn
     image: dperson/openvpn-client
+    depends_on:
+      - rclone_mount
     volumes:
         - ./config/vpn/:/vpn/
     cap_add:
@@ -29,13 +52,10 @@ services:
       - PUID=${PUID}
       - TZ=${TZ}
     networks:
-      # torrentvpn:
-      #   ipv4_address: 172.25.0.2
-      # default: null
       - default
       - torrentvpn
-    ports:
-      - ${QBIT_MANAGE_PORT_8080}:8080
+    # ports:
+    #   - ${QBIT_MANAGE_PORT_8080}:8080
     sysctls:
       - net.ipv6.conf.all.disable_ipv6=0
     # if using '-d' or 'DNS' you can't enable the `read_only: true` option
@@ -53,16 +73,12 @@ services:
   qbittorrent:
     container_name: qbittorrent
     image: hotio/qbittorrent
-    network_mode: "service:torrentvpn"
-    # networks:
-    #   torrentvpn:
-    #     ipv4_address: 172.25.0.3
-      # - default
-      # - torrentvpn
     depends_on:
-      - torrentvpn
-    # ports:
-    #   - ${QBIT_MANAGE_PORT_8080}:8080
+      - rclone_mount
+    # network_mode: "service:gluetun"
+    ports:
+      - ${QBIT_MANAGE_PORT_8080}:8080
+      - ${QBIT_PORT_9000}:9000
     environment:
       - PGID=${PGID}
       - PUID=${PUID}
@@ -153,6 +169,8 @@ services:
 
   sonarr:
     image: lscr.io/linuxserver/sonarr
+    depends_on:
+      - rclone_mount
     ports:
       - ${SONARR_PORT_8989}:8989
     container_name: sonarr
@@ -173,6 +191,8 @@ services:
       
   radarr:
     image: lscr.io/linuxserver/radarr
+    depends_on:
+      - rclone_mount
     ports:
       - ${RADARR_PORT_7878}:7878
     container_name: radarr
@@ -193,6 +213,8 @@ services:
   
   bazarr:
     image: lscr.io/linuxserver/bazarr
+    depends_on:
+      - rclone_mount
     ports:
       - ${BAZARR_PORT_6767}:6767
     container_name: bazarr
@@ -213,6 +235,8 @@ services:
 
   lidarr:
     image: lscr.io/linuxserver/lidarr
+    depends_on:
+      - rclone_mount
     ports:
       - ${LIDARR_PORT_8686}:8686
     container_name: lidarr
@@ -232,11 +256,14 @@ services:
       - ${HOME_SCRIPT_STORAGE}:/storage
 
   readarr:
-    image: hotio/readarr:nightly
-    # image: ghcr.io/linuxserver/readarr
+    # image: hotio/readarr:nightly
+    image: ghcr.io/linuxserver/readarr:nightly
+    depends_on:
+      - rclone_mount
     container_name: readarr
     ports:
-      - ${READARR_PORT_8686}:8787
+      - ${READARR_PORT_8686}:8686
+      # - ${READARR_PORT_8787}:8787
     environment:
       - PGID=${PGID}
       - PUID=${PUID}
@@ -251,6 +278,26 @@ services:
       - /etc/localtime:/etc/localtime:ro
       - ${BASE_DATA_DIR}/lidarr:/config
       - ${HOME_SCRIPT_STORAGE}:/storage
+
+
+  calibre:
+    image: lscr.io/linuxserver/calibre
+    depends_on:
+      - rclone_mount
+    container_name: calibre
+    environment:
+      - PGID=${PGID}
+      - PUID=${PUID}
+      - TZ=${TZ}
+      - PASSWORD= #optional
+      - CLI_ARGS= #optional
+    volumes:
+      - ${BASE_DATA_DIR}/calibre:/config
+      - ${HOME_SCRIPT_STORAGE}:/storage
+    ports:
+      - ${CALIBRE_DESKTOP_8080}:8080
+      - ${CALIBRE_WEBSERVER_8081}:8081
+    restart: unless-stopped
 
   prowlarr:
     image: linuxserver/prowlarr:nightly
@@ -310,11 +357,10 @@ services:
     restart: unless-stopped 
 
 
-
-
-
   jellyfin:
     image: lscr.io/linuxserver/jellyfin:nightly
+    depends_on:
+      - rclone_mount
     container_name: jellyfin
     runtime: nvidia
     # privileged: true
@@ -354,6 +400,8 @@ services:
 
   nzbget:
     image: lscr.io/linuxserver/nzbget
+    depends_on:
+      - rclone_mount
     ports:
       - ${NZBGET_PORT_6789:-6789}:6789
     container_name: nzbget
@@ -374,6 +422,8 @@ services:
 
   transmission:
     image: lscr.io/linuxserver/transmission
+    depends_on:
+      - rclone_mount
     ports:
       - ${TRANSMISSION_PORT_51413}:51413
       - ${TRANSMISSION_PORT_51413}:51413/udp

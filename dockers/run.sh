@@ -32,3 +32,6 @@ dockers() {
         eval docker-compose $@
     fi
 }
+
+
+# mkdir -p {qbittorrent,transmission,nzbget}/{watch,torrents,torrents_done,{sonarr,radarr,lidarr,readarr,others}/{complete,incomplete}}
