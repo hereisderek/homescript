@@ -1,0 +1,4 @@
+[submodule "dockers/profiles"]
+	path = dockers/profiles
+	url = git@github.com:hereisderek/homescript_profiles.git
+	branch = master
