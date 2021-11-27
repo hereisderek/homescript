@@ -5,15 +5,21 @@ if [[ $(pidof -x "$(basename "$0")" -o %PPID) ]]; then
 echo "Already running, exiting..."; exit 1; fi
 
 
-export RCLONE_CONFIG_DIR=/dockers/config/rclone/config
+export RCLONE_CONFIG_DIR=/media/data1/home_service/data/rclone
 DOCKER_CONFIG_DIR=/config/rclone
 
 EXCLUDE_FILE_NAME=exclude.txt
 CONFIG_FILE_NAME=rclone.conf
+LOCAL=/media/data2/storage
 
-LOCAL=/media/data/storage
+SYNC_LIST=" /
+    /media/data/storage:Shared/Media
+
+"
+
+
 # REMOTES="share_04 share_03 share_02 share_01"
-REMOTES="share_02 share_04 share_03 share_02"
+REMOTES="share_04 share_03 share_03 share_02"
 REMOTE_MEDIA_PATH_RELATTIVE="/Shared/Media"
 
 
@@ -50,7 +56,7 @@ for remote in ${REMOTES}; do
         move /data/ ${remote_location}  --delete-empty-src-dirs  \
         -v -P ${docker_exclude}  --transfers 8 --checkers 8 \
         --fast-list --drive-stop-on-upload-limit --delete-during \
-	--min-age 0h  --drive-chunk-size=128M --max-transfer 700G \
+	    --min-age 0h  --drive-chunk-size=128M --max-transfer 700G 
 
 
     error_code=$?
@@ -76,3 +82,28 @@ done
 # Move older local files to the cloud...
 # I added in 3 days to let the files sit a few days so Plex intro anaylsis can happen locally
 # /usr/bin/rclone move $LOCAL gcrypt: --log-file /opt/rclone/logs/upload.log -v --exclude-from /opt/rclone/scripts/excludes --delete-empty-src-dirs --fast-list --drive-stop-on-upload-limit --min-age 3d
+
+
+return 0
+
+sync_to_remte() {
+    local local_path=$1
+    local fs=${2}
+    if [[ ! -f ${RCLONE_CONFIG_DIR}/${EXCLUDE_FILE_NAME} ]]; then
+    echo "excludes file not found, aborting..."; exit 1; fi
+
+    docker_exclude="--exclude-from ${DOCKER_CONFIG_DIR}/${EXCLUDE_FILE_NAME}"
+    return 1
+
+    docker run --name ${docker_name} --rm -ti \
+        --volume ${RCLONE_CONFIG_DIR}:${DOCKER_CONFIG_DIR} \
+        --volume ${LOCAL}:/data \
+        --user $(id -u):$(id -g) \
+        rclone/rclone:beta \
+        move /data/ ${remote_location}  --delete-empty-src-dirs  \
+        -v -P ${docker_exclude}  --transfers 8 --checkers 8 \
+        --fast-list --drive-stop-on-upload-limit --delete-during \
+	    --min-age 0h  --drive-chunk-size=128M --max-transfer 700G 
+
+    
+}
