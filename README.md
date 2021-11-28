@@ -1,4 +1,4 @@
-# Home scripe
+# Home script
 -----
 Utilize Docker to create automation tasks for home media server. this is heavily inspired by [animosity22/homescripts](https://github.com/animosity22/homescripts/) and [DockSTARTer](https://dockstarter.com/) (just everything in a docker), special thanks!
 

@@ -23,6 +23,8 @@ services:
       - rclone_mount
     cap_add:
       - NET_ADMIN
+    profiles:
+      - vpn
     ports:
       - 8888:8888/tcp # HTTP proxy
       - 8388:8388/tcp # Shadowsocks
@@ -41,8 +43,8 @@ services:
   torrentvpn:
     container_name: torrentvpn
     image: dperson/openvpn-client
-    depends_on:
-      - rclone_mount
+    profiles:
+      - vpn
     volumes:
         - ./config/vpn/:/vpn/
     cap_add:
@@ -334,7 +336,7 @@ services:
     volumes:
       - /etc/localtime:/etc/localtime:ro
       - ${BASE_DATA_DIR}/jackett:/config
-      - ${HOME_SCRIPT_STORAGE}/_downloads/jackett:/downloads
+      - ${BASE_CACHE_DIR}/jackett/downloads:/downloads
 
 
   flaresolverr:
