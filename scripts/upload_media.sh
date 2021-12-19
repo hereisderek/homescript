@@ -19,7 +19,7 @@ SYNC_LIST=" /
 
 
 # REMOTES="share_04 share_03 share_02 share_01"
-REMOTES="share_04 share_03 share_03 share_02"
+REMOTES="share_01 share_04 share_03 share_02"
 REMOTE_MEDIA_PATH_RELATTIVE="/Shared/Media"
 
 
@@ -48,15 +48,17 @@ for remote in ${REMOTES}; do
 
     docker_name="rclone_sync_${remote}"
     docker rm $docker_name
+    # copy /data/ ${remote_location}  \
+    # move /data/ ${remote_location}  --delete-empty-src-dirs
     docker run --name ${docker_name} --rm -ti \
         --volume ${RCLONE_CONFIG_DIR}:${DOCKER_CONFIG_DIR} \
         --volume ${LOCAL}:/data \
         --user $(id -u):$(id -g) \
         rclone/rclone:beta \
-        move /data/ ${remote_location}  --delete-empty-src-dirs  \
+     	move /data/ ${remote_location}  --delete-empty-src-dirs \
         -v -P ${docker_exclude}  --transfers 8 --checkers 8 \
         --fast-list --drive-stop-on-upload-limit --delete-during \
-	    --min-age 0h  --drive-chunk-size=128M --max-transfer 700G 
+	--min-age 0h  --drive-chunk-size=128M --max-transfer 700G 
 
 
     error_code=$?
@@ -84,26 +86,4 @@ done
 # /usr/bin/rclone move $LOCAL gcrypt: --log-file /opt/rclone/logs/upload.log -v --exclude-from /opt/rclone/scripts/excludes --delete-empty-src-dirs --fast-list --drive-stop-on-upload-limit --min-age 3d
 
 
-return 0
 
-sync_to_remte() {
-    local local_path=$1
-    local fs=${2}
-    if [[ ! -f ${RCLONE_CONFIG_DIR}/${EXCLUDE_FILE_NAME} ]]; then
-    echo "excludes file not found, aborting..."; exit 1; fi
-
-    docker_exclude="--exclude-from ${DOCKER_CONFIG_DIR}/${EXCLUDE_FILE_NAME}"
-    return 1
-
-    docker run --name ${docker_name} --rm -ti \
-        --volume ${RCLONE_CONFIG_DIR}:${DOCKER_CONFIG_DIR} \
-        --volume ${LOCAL}:/data \
-        --user $(id -u):$(id -g) \
-        rclone/rclone:beta \
-        move /data/ ${remote_location}  --delete-empty-src-dirs  \
-        -v -P ${docker_exclude}  --transfers 8 --checkers 8 \
-        --fast-list --drive-stop-on-upload-limit --delete-during \
-	    --min-age 0h  --drive-chunk-size=128M --max-transfer 700G 
-
-    
-}
