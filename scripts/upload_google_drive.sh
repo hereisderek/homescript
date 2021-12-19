@@ -85,7 +85,7 @@ for remote in "${REMOTES_LIST[@]}"; do
         declare remote_path="${remote}:${items[1]}"
         echo -e "index:$i local_path:[$local_path] remote_path:[$remote_path]"
         sync_to_remote $local_path $remote_path
-        local error_code=$?
+        declare error_code=$?
 
         case $error_code in
             7|8)
