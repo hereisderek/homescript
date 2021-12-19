@@ -128,7 +128,7 @@ services:
     volumes:
       # - ${BASE_CACHE_DIR}/watchtower/config.json:/config.json
       - /var/run/docker.sock:/var/run/docker.sock
-    command: --cleanup --no-restart --http-api-metrics
+    command: --cleanup --http-api-metrics
 
   rclone_mount:
     image: hereisderek/rclone_mergerfs_mounter:nightly
